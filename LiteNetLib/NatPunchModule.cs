@@ -128,12 +128,12 @@ namespace LiteNetLib
         {
             //prepare outgoing data
             NetDataWriter dw = new NetDataWriter();
-            string networkIp = NetUtils.GetLocalIp(LocalAddrType.IPv4);
-            if (string.IsNullOrEmpty(networkIp))
+            var networkIp = NetUtils.GetLocalIp(LocalAddrType.IPv4);
+            if (networkIp == IPAddress.None)
             {
                 networkIp = NetUtils.GetLocalIp(LocalAddrType.IPv6);
             }
-            IPEndPoint localEndPoint = NetUtils.MakeEndPoint(networkIp, _socket.LocalPort);
+            IPEndPoint localEndPoint = new IPEndPoint(networkIp, _socket.LocalPort);
             dw.Put((byte)PacketProperty.NatIntroductionRequest);
             dw.Put(localEndPoint);
             dw.Put(additionalInfo, MaxTokenLength);

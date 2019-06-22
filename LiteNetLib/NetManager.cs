@@ -1056,8 +1056,8 @@ namespace LiteNetLib
         /// <param name="port">port to listen</param>
         public bool Start(string addressIPv4, string addressIPv6, int port)
         {
-            IPAddress ipv4 = NetUtils.ResolveAddress(addressIPv4);
-            IPAddress ipv6 = NetUtils.ResolveAddress(addressIPv6);
+            IPAddress ipv4 = NetUtils.ResolveAddress(addressIPv4, AddressFamily.InterNetwork);
+            IPAddress ipv6 = IPv6Enabled ? NetUtils.ResolveAddress(addressIPv6, AddressFamily.InterNetworkV6) : IPAddress.None;
             return Start(ipv4, ipv6, port);
         }
 

@@ -27,36 +27,34 @@ namespace LiteNetLib
             return new IPEndPoint(ResolveAddress(hostStr), port);
         }
 
-        public static IPAddress ResolveAddress(string hostStr)
+        public static IPAddress ResolveAddress(string hostStr, AddressFamily addressFamily = AddressFamily.Unspecified)
         {
-            if(hostStr == "localhost")
-                return IPAddress.Loopback;
-            
-            IPAddress ipAddress;
-            if (!IPAddress.TryParse(hostStr, out ipAddress))
-            {
-                if (NetSocket.IPv6Support)
-                    ipAddress = ResolveAddress(hostStr, AddressFamily.InterNetworkV6);
-                if (ipAddress == null)
-                    ipAddress = ResolveAddress(hostStr, AddressFamily.InterNetwork);
-            }
-            if (ipAddress == null)
-                throw new ArgumentException("Invalid address: " + hostStr);
-
-            return ipAddress;
-        }
-
-        private static IPAddress ResolveAddress(string hostStr, AddressFamily addressFamily)
-        {
-            IPAddress[] addresses = ResolveAddresses(hostStr);
-            foreach (IPAddress ip in addresses)
-            {
-                if (ip.AddressFamily == addressFamily)
+            if (addressFamily == AddressFamily.InterNetworkV6)
+                if (!NetSocket.IPv6Support)
                 {
-                    return ip;
+                    if (string.IsNullOrEmpty(hostStr))
+                        return IPAddress.None;
+
+                    throw new InvalidOperationException("IPV6 support is disabled.");
                 }
+
+
+            IPAddress ipAddress;
+            if (IPAddress.TryParse(hostStr, out ipAddress))
+            {
+                if (addressFamily == AddressFamily.Unspecified || ipAddress.AddressFamily == addressFamily)
+                    return ipAddress;
+
+                throw new ArgumentException("Invalid address: " + hostStr, "hostStr");
             }
-            return null;
+            else
+            {
+                foreach (IPAddress ip in ResolveAddresses(hostStr))
+                    if ((addressFamily == AddressFamily.Unspecified && ip.AddressFamily > AddressFamily.Unspecified) || (ip.AddressFamily == addressFamily))
+                        return ip;
+            }
+
+            throw new SocketException((int)SocketError.HostNotFound);
         }
 
         private static IPAddress[] ResolveAddresses(string hostStr)
@@ -76,9 +74,9 @@ namespace LiteNetLib
         /// </summary>
         /// <param name="addrType">type of address (IPv4, IPv6 or both)</param>
         /// <returns>List with all local ip adresses</returns>
-        public static List<string> GetLocalIpList(LocalAddrType addrType)
+        public static List<IPAddress> GetLocalIpList(LocalAddrType addrType)
         {
-            List<string> targetList = new List<string>();
+            List<IPAddress> targetList = new List<IPAddress>();
             GetLocalIpList(targetList, addrType);
             return targetList;
         }
@@ -88,7 +86,7 @@ namespace LiteNetLib
         /// </summary>
         /// <param name="targetList">result list</param>
         /// <param name="addrType">type of address (IPv4, IPv6 or both)</param>
-        public static void GetLocalIpList(List<string> targetList, LocalAddrType addrType)
+        public static void GetLocalIpList(List<IPAddress> targetList, LocalAddrType addrType)
         {
             bool ipv4 = (addrType & LocalAddrType.IPv4) == LocalAddrType.IPv4;
             bool ipv6 = (addrType & LocalAddrType.IPv6) == LocalAddrType.IPv6;
@@ -112,7 +110,7 @@ namespace LiteNetLib
                         var address = ip.Address;
                         if ((ipv4 && address.AddressFamily == AddressFamily.InterNetwork) ||
                             (ipv6 && address.AddressFamily == AddressFamily.InterNetworkV6))
-                            targetList.Add(address.ToString());
+                            targetList.Add(address);
                     }
                 }
             }
@@ -129,31 +127,31 @@ namespace LiteNetLib
                 {
                     if((ipv4 && ip.AddressFamily == AddressFamily.InterNetwork) ||
                        (ipv6 && ip.AddressFamily == AddressFamily.InterNetworkV6))
-                        targetList.Add(ip.ToString());
+                        targetList.Add(ip);
                 }
             }
             if (targetList.Count == 0)
             {
                 if(ipv4)
-                    targetList.Add("127.0.0.1");
+                    targetList.Add(IPAddress.Loopback);
                 if(ipv6)
-                    targetList.Add("::1");
+                    targetList.Add(IPAddress.IPv6Loopback);
             }
         }
 
-        private static readonly List<string> IpList = new List<string>();
+        private static readonly List<IPAddress> IpList = new List<IPAddress>();
         /// <summary>
         /// Get first detected local ip address
         /// </summary>
         /// <param name="addrType">type of address (IPv4, IPv6 or both)</param>
         /// <returns>IP address if available. Else - string.Empty</returns>
-        public static string GetLocalIp(LocalAddrType addrType)
+        public static IPAddress GetLocalIp(LocalAddrType addrType)
         {
             lock (IpList)
             {
                 IpList.Clear();
                 GetLocalIpList(IpList, addrType);
-                return IpList.Count == 0 ? string.Empty : IpList[0];
+                return IpList.Count == 0 ? IPAddress.None : IpList[0];
             }
         }
 
