@@ -1,0 +1,16 @@
+{
+	"name": "com.github.drunken-lemurs.lite-net-lib",
+	"displayName": "LiteNetLib",
+	"description": "Lite reliable UDP library",
+	"version": "0.9.1-preview",
+	"unity": "2018.3",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/drunken-lemurs/LiteNetLib.git"
+	},
+	"src": "LiteNetLib",
+	"author": "Ruslan Pyrch (https://github.com/RevenantX)",
+	"dependencies": {
+	}
+}
