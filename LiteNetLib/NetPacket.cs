@@ -84,12 +84,15 @@ namespace LiteNetLib
 
         //Data
         public byte[] RawData;
-        public int Size;
+        public ushort Size;
+
+        //Delivery
+        public object UserData;
 
         public NetPacket(int size)
         {
             RawData = new byte[size];
-            Size = size;
+            Size = (ushort)size;
         }
 
         public NetPacket(PacketProperty property, int size)
@@ -97,19 +100,7 @@ namespace LiteNetLib
             size += GetHeaderSize(property);
             RawData = new byte[size];
             Property = property;
-            Size = size;
-        }
-
-        public void Realloc(int toSize, bool clear)
-        {
-            Size = toSize;
-            if (RawData.Length < toSize)
-            {
-                RawData = new byte[toSize];
-                return;
-            }
-            if (clear)  //clear not reallocated
-                Array.Clear(RawData, 0, toSize);
+            Size = (ushort)size;
         }
 
         public static int GetHeaderSize(PacketProperty property)
@@ -148,13 +139,14 @@ namespace LiteNetLib
             int headerSize = GetHeaderSize((PacketProperty) property);
 
             if (property > LastProperty || packetSize < headerSize ||
-               (fragmented && packetSize < headerSize + NetConstants.FragmentHeaderSize))
+               (fragmented && packetSize < headerSize + NetConstants.FragmentHeaderSize) ||
+               data.Length < start + packetSize)
             {
                 return false;
             }
 
             Buffer.BlockCopy(data, start, RawData, 0, packetSize);
-            Size = packetSize;
+            Size = (ushort)packetSize;
             return true;
         }
     }

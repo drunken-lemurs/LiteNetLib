@@ -1,12 +1,14 @@
 # LiteNetLib 0.9 indev
 
-Lite reliable UDP library for .NET Framework 3.5, Mono, .NET Core 2.0, .NET Standard 2.0.
+Lite reliable UDP library for .NET Framework 3.5, Mono, .NET Core 2.1, .NET Standard 2.0.
 
 [STABLE BRANCH (and examples) for 0.8.x](https://github.com/RevenantX/LiteNetLib/tree/0.8)
 
 [![Discord](https://img.shields.io/discord/501682175930925058.svg)](https://discord.gg/FATFPdy)
 
 [Little Game Example on Unity](https://github.com/RevenantX/NetGameExample)
+
+[Documentation](https://revenantx.github.io/LiteNetLib/index.html)
 
 ## Build
 
@@ -24,7 +26,7 @@ Lite reliable UDP library for .NET Framework 3.5, Mono, .NET Core 2.0, .NET Stan
 
 * Lightweight
   * Small CPU and RAM usage
-  * Small packet size overhead ( 1 byte for unreliable, 3 bytes for reliable packets )
+  * Small packet size overhead ( 1 byte for unreliable, 4 bytes for reliable packets )
 * Simple connection handling
 * Peer to peer connections
 * Helper classes for sending and reading messages
@@ -35,10 +37,11 @@ Lite reliable UDP library for .NET Framework 3.5, Mono, .NET Core 2.0, .NET Stan
   * Reliable sequenced (realiable only last packet)
   * Ordered but unreliable with duplication prevention
   * Simple UDP packets without order and reliability
-* Fast packet serializer [(Usage manual)](https://github.com/RevenantX/LiteNetLib/wiki/NetSerializer-usage)
+* Fast packet serializer [(Usage manual)](https://revenantx.github.io/LiteNetLib/articles/netserializerusage.html)
 * Automatic small packets merging
 * Automatic fragmentation of reliable packets
 * Automatic MTU detection
+* Optional CRC32C checksums
 * UDP NAT hole punching
 * NTP time requests
 * Packet loss and latency simulation
@@ -54,7 +57,7 @@ Lite reliable UDP library for .NET Framework 3.5, Mono, .NET Core 2.0, .NET Stan
   * Lumin OS (Magic Leap)
 
 ## Unity notes!!!
-* Always use library sources instead of precompiled DLL files. 
+* Always use library sources instead of precompiled DLL files ( because there are platform specific #ifdefs and workarounds for unity bugs )
 
 ## Usage samples
 
@@ -151,5 +154,6 @@ server.Stop();
   * maximum connection attempts before client stops and call disconnect event.
   * default value: **10**
 * **UnsyncedEvents**
-  * Experimental feature. Events automatically will be called without PollEvents method from another thread
+  * Warning! Use this only when you know what are you doing, and sync data manually
+  * Events automatically will be called without PollEvents method from socket recieve thread
   * default value: **false**

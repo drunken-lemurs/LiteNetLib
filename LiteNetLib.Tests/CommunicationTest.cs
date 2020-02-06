@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-
+using LiteNetLib.Layers;
 using LiteNetLib.Tests.TestUtility;
 using LiteNetLib.Utils;
 
@@ -10,13 +10,24 @@ using NUnit.Framework;
 
 namespace LiteNetLib.Tests
 {
+    class LibErrorChecker : INetLogger
+    {
+        public void WriteNet(NetLogLevel level, string str, params object[] args)
+        {
+            if(level == NetLogLevel.Error || level == NetLogLevel.Warning)
+                Assert.Fail(str, args);
+        }
+    }
+
     [TestFixture]
     [Category("Communication")]
     public class CommunicationTest
     {
+        const int TestTimeout = 4000;
         [SetUp]
         public void Init()
         {
+            NetDebug.Logger = new LibErrorChecker();
             ManagerStack = new NetManagerStack(DefaultAppKey, DefaultPort);
         }
 
@@ -31,24 +42,68 @@ namespace LiteNetLib.Tests
 
         public NetManagerStack ManagerStack { get; set; }
 
-        [Test, MaxTime(2000)]
+        [Test, Timeout(TestTimeout)]
         public void ConnectionByIpV4()
         {
             var server = ManagerStack.Server(1);
             var client = ManagerStack.Client(1);
             client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
 
-            while (server.PeersCount != 1 || client.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1 || client.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
             }
 
-            Assert.AreEqual(1, server.PeersCount);
-            Assert.AreEqual(1, client.PeersCount);
+            Assert.AreEqual(1, server.ConnectedPeersCount);
+            Assert.AreEqual(1, client.ConnectedPeersCount);
         }
 
-        [Test, MaxTime(2000)]
+        [Test, Timeout(TestTimeout)]
+        public void DeliveryTest()
+        {
+            var server = ManagerStack.Server(1);
+            var client = ManagerStack.Client(1);
+            bool msgDelivered = false;
+            bool msgReceived = false;
+
+            ManagerStack.ClientListener(1).DeliveryEvent += (peer, obj) =>
+            {
+                Assert.AreEqual(5, (int)obj);
+                msgDelivered = true;
+            };
+            ManagerStack.ClientListener(1).PeerConnectedEvent += peer =>
+            {
+                int testData = 5;
+                byte[] arr = new byte[12500];
+                arr[0] = 196;
+                arr[7000] = 32;
+                arr[12499] = 200;
+                peer.SendWithDeliveryEvent(arr, 0, DeliveryMethod.ReliableUnordered, testData);
+            };
+            ManagerStack.ServerListener(1).NetworkReceiveEvent += (peer, reader, method) =>
+            {
+                Assert.AreEqual(12500, reader.UserDataSize);
+                Assert.AreEqual(196, reader.RawData[reader.UserDataOffset]);
+                Assert.AreEqual(32, reader.RawData[reader.UserDataOffset + 7000]);
+                Assert.AreEqual(200, reader.RawData[reader.UserDataOffset + 12499]);
+                msgReceived = true;
+            };
+
+            client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
+
+            while (server.ConnectedPeersCount != 1 || client.ConnectedPeersCount != 1 || !msgDelivered || !msgReceived)
+            {
+                Thread.Sleep(15);
+                server.PollEvents();
+                client.PollEvents();
+            }
+
+            Assert.AreEqual(1, server.ConnectedPeersCount);
+            Assert.AreEqual(1, client.ConnectedPeersCount);
+        }
+
+        [Test, Timeout(TestTimeout)]
         public void PeerNotFoundTest()
         {
             var server = ManagerStack.Server(1);
@@ -57,26 +112,26 @@ namespace LiteNetLib.Tests
             ManagerStack.ClientListener(1).PeerDisconnectedEvent += (peer, info) => disconnectInfo = info;
             client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
 
-            while (server.PeersCount != 1 || client.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1 || client.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
             }
             server.Stop(false);
             server.Start(DefaultPort);
-            while (client.PeersCount == 1)
+            while (client.ConnectedPeersCount == 1)
             {
                 Thread.Sleep(15);
             }
             client.PollEvents();
 
-            Assert.AreEqual(0, server.PeersCount);
-            Assert.AreEqual(0, client.PeersCount);
+            Assert.AreEqual(0, server.ConnectedPeersCount);
+            Assert.AreEqual(0, client.ConnectedPeersCount);
             Assert.IsTrue(disconnectInfo.HasValue);
             Assert.AreEqual(DisconnectReason.RemoteConnectionClose, disconnectInfo.Value.Reason);
         }
 
-        [Test, MaxTime(10000)]
+        [Test, Timeout(10000)]
         public void ConnectionFailedTest()
         {
             NetManager client = ManagerStack.Client(1);
@@ -106,7 +161,7 @@ namespace LiteNetLib.Tests
             Assert.AreEqual(DisconnectReason.ConnectionFailed, disconnectInfo.Reason);
         }
 
-        [Test, MaxTime(10000)]
+        [Test, Timeout(10000)]
         public void NetPeerDisconnectTimeout()
         {
             NetManager client = ManagerStack.Client(1);
@@ -125,7 +180,7 @@ namespace LiteNetLib.Tests
             }
 
             Assert.AreEqual(ConnectionState.Connected, clientServerPeer.ConnectionState);
-            Assert.True(server.PeersCount == 1);
+            Assert.True(server.ConnectedPeersCount == 1);
 
             ManagerStack.ClientListener(1).PeerDisconnectedEvent += (peer, info) =>
             {
@@ -135,8 +190,8 @@ namespace LiteNetLib.Tests
 
             server.Stop();
             
-            Assert.True(server.PeersCount == 0);
-            while (client.PeersCount == 1)
+            Assert.True(server.ConnectedPeersCount == 0);
+            while (client.ConnectedPeersCount == 1)
             {
                 Thread.Sleep(15);
             }
@@ -211,11 +266,43 @@ namespace LiteNetLib.Tests
                 Thread.Sleep(15);
             }
 
-            Assert.AreEqual(0, server.PeersCount);
-            Assert.AreEqual(0, client.PeersCount);
+            Assert.AreEqual(0, server.ConnectedPeersCount);
+            Assert.AreEqual(0, client.ConnectedPeersCount);
         }
 
-        [Test, MaxTime(10000)]
+        [Test]
+        public void RejectForceTest()
+        {
+            var server = ManagerStack.Server(1);
+            var client = ManagerStack.Client(1);
+            bool rejectReceived = false;
+
+            ManagerStack.ServerListener(1).ClearConnectionRequestEvent();
+            ManagerStack.ServerListener(1).ConnectionRequestEvent += request =>
+            {
+                request.RejectForce(Encoding.UTF8.GetBytes("reject_test"));
+            };
+            ManagerStack.ClientListener(1).PeerDisconnectedEvent += (peer, info) =>
+            {
+                Assert.AreEqual(true, info.Reason == DisconnectReason.ConnectionRejected);
+                Assert.AreEqual("reject_test", Encoding.UTF8.GetString(info.AdditionalData.GetRemainingBytes()));
+                rejectReceived = true;
+            };
+
+            client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
+
+            while (!rejectReceived)
+            {
+                client.PollEvents();
+                server.PollEvents();
+                Thread.Sleep(15);
+            }
+
+            Assert.AreEqual(0, server.ConnectedPeersCount);
+            Assert.AreEqual(0, client.ConnectedPeersCount);
+        }
+
+        [Test, Timeout(10000)]
         public void NetPeerDisconnectAll()
         {
             NetManager client = ManagerStack.Client(1);
@@ -258,11 +345,11 @@ namespace LiteNetLib.Tests
             //Wait for client 'ShutdownOk' response
             Thread.Sleep(100);
 
-            Assert.AreEqual(0, server.PeersCount);
+            Assert.AreEqual(0, server.ConnectedPeersCount);
             Assert.AreEqual(ConnectionState.Disconnected, clientServerPeer.ConnectionState);
         }
 
-        [Test, MaxTime(2000)]
+        [Test, Timeout(TestTimeout)]
         public void DisconnectFromServerTest()
         {
             NetManager server = ManagerStack.Server(1);
@@ -273,7 +360,7 @@ namespace LiteNetLib.Tests
             ManagerStack.ServerListener(1).PeerDisconnectedEvent += (peer, info) => { serverDisconnected = true; };
 
             client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
-            while (server.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
@@ -293,20 +380,45 @@ namespace LiteNetLib.Tests
 
             Assert.True(clientDisconnected);
             Assert.True(serverDisconnected);
-            Assert.AreEqual(0, server.PeersCount);
-            Assert.AreEqual(0, client.PeersCount);
+            Assert.AreEqual(0, server.ConnectedPeersCount);
+            Assert.AreEqual(0, client.ConnectedPeersCount);
         }
 
-        [Test, MaxTime(5000)]
+        [Test, Timeout(5000)]
+        public void EncryptTest()
+        {
+            EventBasedNetListener srvListener = new EventBasedNetListener();
+            EventBasedNetListener cliListener = new EventBasedNetListener();
+            NetManager srv = new NetManager(srvListener, new XorEncryptLayer("secret_key"));
+            NetManager cli = new NetManager(cliListener, new XorEncryptLayer("secret_key"));
+            srv.Start(DefaultPort + 1);
+            cli.Start();
+
+            srvListener.ConnectionRequestEvent += request => { request.AcceptIfKey(DefaultAppKey); };
+            cli.Connect("127.0.0.1", DefaultPort + 1, DefaultAppKey);
+
+            while (srv.ConnectedPeersCount != 1)
+            {
+                Thread.Sleep(15);
+                srv.PollEvents();
+            }
+            Thread.Sleep(200);
+            Assert.AreEqual(1, srv.ConnectedPeersCount);
+            Assert.AreEqual(1, cli.ConnectedPeersCount);
+            cli.Stop();
+            srv.Stop();
+        }
+
+        [Test, Timeout(5000)]
         public void ConnectAfterDisconnectWithSamePort()
         {
             NetManager server = ManagerStack.Server(1);
 
             EventBasedNetListener listener = new EventBasedNetListener();
-            NetManager client = new NetManager(listener);
+            NetManager client = new NetManager(listener, new Crc32cLayer());
             Assert.True(client.Start(9049));
             client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
-            while (server.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
@@ -329,11 +441,12 @@ namespace LiteNetLib.Tests
             }
 
             Assert.True(connected);
-            Assert.AreEqual(1, server.PeersCount);
-            Assert.AreEqual(1, client.PeersCount);
+            Assert.AreEqual(1, server.ConnectedPeersCount);
+            Assert.AreEqual(1, client.ConnectedPeersCount);
+            client.Stop();
         }
 
-        [Test, MaxTime(2000)]
+        [Test, Timeout(TestTimeout)]
         public void DisconnectFromClientTest()
         {
             NetManager server = ManagerStack.Server(1);
@@ -345,7 +458,7 @@ namespace LiteNetLib.Tests
             ManagerStack.ServerListener(1).PeerDisconnectedEvent += (peer, info) => { serverDisconnected = true; };
 
             NetPeer serverPeer = client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
-            while (server.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
@@ -366,28 +479,75 @@ namespace LiteNetLib.Tests
 
             Assert.True(clientDisconnected);
             Assert.True(serverDisconnected);
-            Assert.AreEqual(0, server.PeersCount);
-            Assert.AreEqual(0, client.PeersCount);
+            Assert.AreEqual(0, server.ConnectedPeersCount);
+            Assert.AreEqual(0, client.ConnectedPeersCount);
         }
 
-        [Test, MaxTime(2000)]
+        [Test]
+        public void ChannelsTest()
+        {
+            const int channelsCount = 64;
+            var server = ManagerStack.Server(1);
+            var client = ManagerStack.Client(1);
+            server.ChannelsCount = channelsCount;
+            client.ChannelsCount = channelsCount;
+            int messagesReceived = 0;
+            ManagerStack.ServerListener(1).NetworkReceiveEvent += (peer, reader, method) =>
+            {
+                Assert.AreEqual((DeliveryMethod)reader.GetByte(), method);
+                messagesReceived++;
+            };
+            client.Connect("127.0.0.1", DefaultPort, DefaultAppKey);
+            NetDataWriter writer = new NetDataWriter();
+            var methods = new[]
+            {
+                DeliveryMethod.Unreliable,
+                DeliveryMethod.Sequenced,
+                DeliveryMethod.ReliableOrdered,
+                DeliveryMethod.ReliableSequenced,
+                DeliveryMethod.ReliableUnordered
+            };
+            for (int i = 0; i < channelsCount; i++)
+            {
+                foreach (var deliveryMethod in methods)
+                {
+                    writer.Reset();
+                    writer.Put((byte)deliveryMethod);
+                    if(deliveryMethod == DeliveryMethod.ReliableOrdered || deliveryMethod == DeliveryMethod.ReliableUnordered)
+                        writer.Put(new byte[506]);
+                    client.FirstPeer.Send(writer, (byte)i, deliveryMethod);
+                }
+            }
+
+            while (messagesReceived != methods.Length*channelsCount)
+            {
+                Thread.Sleep(15);
+                server.PollEvents();
+            }
+
+            Assert.AreEqual(methods.Length*channelsCount, messagesReceived);
+            Assert.AreEqual(1, server.ConnectedPeersCount);
+            Assert.AreEqual(1, client.ConnectedPeersCount);
+        }
+
+        [Test, Timeout(TestTimeout)]
         public void ConnectionByIpV6()
         {
             var server = ManagerStack.Server(1);
             var client = ManagerStack.Client(1);
             client.Connect("::1", DefaultPort, DefaultAppKey);
 
-            while (server.PeersCount != 1 || client.PeersCount != 1)
+            while (server.ConnectedPeersCount != 1 || client.ConnectedPeersCount != 1)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
             }
 
-            Assert.AreEqual(1, server.PeersCount);
-            Assert.AreEqual(1, client.PeersCount);
+            Assert.AreEqual(1, server.ConnectedPeersCount);
+            Assert.AreEqual(1, client.ConnectedPeersCount);
         }
 
-        [Test, MaxTime(2000)]
+        [Test, Timeout(10000)]
         public void DiscoveryBroadcastTest()
         {
             var server = ManagerStack.Server(1);
@@ -424,7 +584,7 @@ namespace LiteNetLib.Tests
 
             ManagerStack.ClientForeach((i, manager, l) => manager.SendBroadcast(writer, DefaultPort));
 
-            while (server.PeersCount < clientCount)
+            while (server.ConnectedPeersCount < clientCount)
             {
                 server.PollEvents();
                 ManagerStack.ClientForeach((i, manager, l) => manager.PollEvents());
@@ -432,11 +592,11 @@ namespace LiteNetLib.Tests
                 Thread.Sleep(15);
             }
 
-            Assert.AreEqual(clientCount, server.PeersCount);
+            Assert.AreEqual(clientCount, server.ConnectedPeersCount);
             ManagerStack.ClientForeach(
                 (i, manager, l) =>
                 {
-                    Assert.AreEqual(manager.PeersCount, 1);
+                    Assert.AreEqual(manager.ConnectedPeersCount, 1);
                 });
         }
 
@@ -464,15 +624,15 @@ namespace LiteNetLib.Tests
                 ManagerStack.Client(i).Connect("127.0.0.1", DefaultPort, DefaultAppKey);
             }
 
-            while (server.PeersCount < clientCount)
+            while (server.ConnectedPeersCount < clientCount)
             {
                 Thread.Sleep(15);
                 server.PollEvents();
             }
 
-            Assert.AreEqual(server.PeersCount, clientCount);
+            Assert.AreEqual(server.ConnectedPeersCount, clientCount);
             Thread.Sleep(100);
-            ManagerStack.ClientForeach((i, manager, l) => Assert.AreEqual(manager.PeersCount, 1));
+            ManagerStack.ClientForeach((i, manager, l) => Assert.AreEqual(manager.ConnectedPeersCount, 1));
 
             var dataStack = new Stack<byte[]>(clientCount);
 
@@ -491,10 +651,10 @@ namespace LiteNetLib.Tests
 
             Assert.AreEqual(dataStack.Count, clientCount);
 
-            Assert.AreEqual(server.PeersCount, clientCount);
+            Assert.AreEqual(server.ConnectedPeersCount, clientCount);
             for (ushort i = 1; i <= clientCount; i++)
             {
-                Assert.AreEqual(ManagerStack.Client(i).PeersCount, 1);
+                Assert.AreEqual(ManagerStack.Client(i).ConnectedPeersCount, 1);
                 Assert.That(data, Is.EqualTo(dataStack.Pop()).AsCollection);
             }
         }

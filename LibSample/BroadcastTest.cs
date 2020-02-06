@@ -50,7 +50,7 @@ namespace LibSample
 
             public void OnConnectionRequest(ConnectionRequest request)
             {
-                request.AcceptIfKey("key");
+                request.Reject();
             }
         }
 
@@ -61,7 +61,7 @@ namespace LibSample
             public void OnPeerConnected(NetPeer peer)
             {
                 Console.WriteLine("[Server] Peer connected: " + peer.EndPoint);
-                var peers = Server.GetPeers(ConnectionState.Connected);
+                var peers = Server.ConnectedPeerList;
                 foreach (var netPeer in peers)
                 {
                     Console.WriteLine("ConnectedPeersList: id={0}, ep={1}", netPeer.Id, netPeer.EndPoint);
@@ -98,7 +98,7 @@ namespace LibSample
 
             public void OnConnectionRequest(ConnectionRequest request)
             {
-                
+                request.AcceptIfKey("key");
             }
         }
 
@@ -125,10 +125,13 @@ namespace LibSample
             //Client
             _clientListener1 = new ClientListener();
 
-            NetManager client1 = new NetManager(_clientListener1);
+            NetManager client1 = new NetManager(_clientListener1)
+            {
+                UnconnectedMessagesEnabled = true, 
+                SimulateLatency = true, 
+                SimulationMaxLatency = 1500
+            };
             _clientListener1.Client = client1;
-            client1.SimulateLatency = true;
-            client1.SimulationMaxLatency = 1500;
             if (!client1.Start())
             {
                 Console.WriteLine("Client1 start failed");
@@ -137,10 +140,14 @@ namespace LibSample
             }
 
             _clientListener2 = new ClientListener();
-            NetManager client2 = new NetManager(_clientListener2);
+            NetManager client2 = new NetManager(_clientListener2)
+            {
+                UnconnectedMessagesEnabled = true,
+                SimulateLatency = true, 
+                SimulationMaxLatency = 1500
+            };
+
             _clientListener2.Client = client2;
-            client2.SimulateLatency = true;
-            client2.SimulationMaxLatency = 1500;
             client2.Start();
 
             //Send broadcast

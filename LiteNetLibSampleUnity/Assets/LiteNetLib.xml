@@ -89,6 +89,13 @@
             </summary>
             <param name="request">Request information (EndPoint, internal id, additional data)</param>
         </member>
+        <member name="M:LiteNetLib.IDeliveryEventListener.OnMessageDelivered(LiteNetLib.NetPeer,System.Object)">
+            <summary>
+            On reliable message delivered
+            </summary>
+            <param name="peer"></param>
+            <param name="userData"></param>
+        </member>
         <member name="T:LiteNetLib.NatPunchModule">
             <summary>
             Module for UDP NAT Hole punching operations. Can be accessed from NetManager
@@ -101,27 +108,27 @@
         </member>
         <member name="F:LiteNetLib.DeliveryMethod.Unreliable">
             <summary>
-            Unreliable. Packets can be dropped, duplicated or arrive without order
+            Unreliable. Packets can be dropped, can be duplicated, can arrive without order.
             </summary>
         </member>
         <member name="F:LiteNetLib.DeliveryMethod.ReliableUnordered">
             <summary>
-            Reliable. All packets will be sent and received, but without order
+            Reliable. Packets won't be dropped, won't be duplicated, can arrive without order.
             </summary>
         </member>
         <member name="F:LiteNetLib.DeliveryMethod.Sequenced">
             <summary>
-            Unreliable. Packets can be dropped, but never duplicated and arrive in order
+            Unreliable. Packets can be dropped, won't be duplicated, will arrive in order.
             </summary>
         </member>
         <member name="F:LiteNetLib.DeliveryMethod.ReliableOrdered">
             <summary>
-            Reliable and ordered. All packets will be sent and received in order
+            Reliable and ordered. Packets won't be dropped, won't be duplicated, will arrive in order.
             </summary>
         </member>
         <member name="F:LiteNetLib.DeliveryMethod.ReliableSequenced">
             <summary>
-            Reliable only last packet
+            Reliable only last packet. Packets can be dropped (except the last one), won't be duplicated, will arrive in order.
             </summary>
         </member>
         <member name="T:LiteNetLib.NetConstants">
@@ -201,6 +208,11 @@
             Experimental feature. Events automatically will be called without PollEvents method from another thread
             </summary>
         </member>
+        <member name="F:LiteNetLib.NetManager.UnsyncedDeliveryEvent">
+            <summary>
+            If true - delivery event will be called from "receive" thread otherwise on PollEvents call
+            </summary>
+        </member>
         <member name="F:LiteNetLib.NetManager.BroadcastReceiveEnabled">
             <summary>
             Allows receive broadcast packets
@@ -266,16 +278,24 @@
             Returns connected peers list (with internal cached list)
             </summary>
         </member>
-        <member name="P:LiteNetLib.NetManager.PeersCount">
+        <member name="M:LiteNetLib.NetManager.GetPeerById(System.Int32)">
+            <summary>
+            Gets peer by peer id
+            </summary>
+            <param name="id">id of peer</param>
+            <returns>Peer if peer with id exist, otherwise null</returns>
+        </member>
+        <member name="P:LiteNetLib.NetManager.ConnectedPeersCount">
             <summary>
             Returns connected peers count
             </summary>
         </member>
-        <member name="M:LiteNetLib.NetManager.#ctor(LiteNetLib.INetEventListener)">
+        <member name="M:LiteNetLib.NetManager.#ctor(LiteNetLib.INetEventListener,LiteNetLib.Layers.PacketLayerBase)">
             <summary>
             NetManager constructor
             </summary>
-            <param name="listener">Network events listener</param>
+            <param name="listener">Network events listener (also can implement IDeliveryEventListener)</param>
+            <param name="extraPacketLayer">Extra processing of packages, like CRC checksum or encryption. All connected NetManagers must have same layer.</param>
         </member>
         <member name="M:LiteNetLib.NetManager.SendToAll(LiteNetLib.Utils.NetDataWriter,LiteNetLib.DeliveryMethod)">
             <summary>
@@ -479,7 +499,7 @@
             </summary>
             <param name="target">Server end point (ip and port)</param>
             <param name="connectionData">Additional data for remote peer</param>
-            <returns>New NetPeer if new connection, Old NetPeer if already connected</returns>
+            <returns>New NetPeer if new connection, Old NetPeer if already connected, null peer if there is ConnectionRequest awaiting</returns>
             <exception cref="T:System.InvalidOperationException">Manager is not running. Call <see cref="M:LiteNetLib.NetManager.Start"/></exception>
         </member>
         <member name="M:LiteNetLib.NetManager.Stop">
@@ -499,18 +519,6 @@
             </summary>
             <param name="peerState">peer connection state (you can use as bit flags)</param>
             <returns>peers count</returns>
-        </member>
-        <member name="M:LiteNetLib.NetManager.GetPeers">
-            <summary>
-            Get copy of current connected peers (slow! use GetPeersNonAlloc for best performance)
-            </summary>
-            <returns>Array with connected peers</returns>
-        </member>
-        <member name="M:LiteNetLib.NetManager.GetPeers(LiteNetLib.ConnectionState)">
-            <summary>
-            Get copy of current connected peers (slow! use GetPeersNonAlloc for best performance)
-            </summary>
-            <returns>Array with connected peers</returns>
         </member>
         <member name="M:LiteNetLib.NetManager.GetPeersNonAlloc(System.Collections.Generic.List{LiteNetLib.NetPeer},LiteNetLib.ConnectionState)">
             <summary>
@@ -577,6 +585,16 @@
             Network peer. Main purpose is sending messages to specific peer.
             </summary>
         </member>
+        <member name="F:LiteNetLib.NetPeer.EndPoint">
+            <summary>
+            Peer ip address and port
+            </summary>
+        </member>
+        <member name="F:LiteNetLib.NetPeer.NetManager">
+            <summary>
+            Peer parent NetManager
+            </summary>
+        </member>
         <member name="P:LiteNetLib.NetPeer.ConnectionState">
             <summary>
             Current connection state
@@ -590,11 +608,6 @@
         <member name="F:LiteNetLib.NetPeer.Id">
             <summary>
             Peer id can be used as key in your dictionary of peers
-            </summary>
-        </member>
-        <member name="P:LiteNetLib.NetPeer.EndPoint">
-            <summary>
-            Peer ip address and port
             </summary>
         </member>
         <member name="P:LiteNetLib.NetPeer.Ping">
@@ -623,11 +636,6 @@
             Time since last packet received (including internal library packets)
             </summary>
         </member>
-        <member name="P:LiteNetLib.NetPeer.NetManager">
-            <summary>
-            Peer parent NetManager
-            </summary>
-        </member>
         <member name="F:LiteNetLib.NetPeer.Tag">
             <summary>
             Application defined object containing data about the connection
@@ -645,12 +653,50 @@
             <param name="options">Type of packet that you want send</param>
             <returns>size in bytes</returns>
         </member>
+        <member name="M:LiteNetLib.NetPeer.SendWithDeliveryEvent(System.Byte[],System.Byte,LiteNetLib.DeliveryMethod,System.Object)">
+            <summary>
+            Send data to peer with delivery event called
+            </summary>
+            <param name="data">Data</param>
+            <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
+            <param name="deliveryMethod">Delivery method (reliable, unreliable, etc.)</param>
+            <param name="userData">User data that will be received in DeliveryEvent</param>
+            <exception cref="T:System.ArgumentException">
+                If you trying to send unreliable packet type<para/>
+            </exception>
+        </member>
+        <member name="M:LiteNetLib.NetPeer.SendWithDeliveryEvent(System.Byte[],System.Int32,System.Int32,System.Byte,LiteNetLib.DeliveryMethod,System.Object)">
+            <summary>
+            Send data to peer with delivery event called
+            </summary>
+            <param name="data">Data</param>
+            <param name="start">Start of data</param>
+            <param name="length">Length of data</param>
+            <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
+            <param name="deliveryMethod">Delivery method (reliable, unreliable, etc.)</param>
+            <param name="userData">User data that will be received in DeliveryEvent</param>
+            <exception cref="T:System.ArgumentException">
+                If you trying to send unreliable packet type<para/>
+            </exception>
+        </member>
+        <member name="M:LiteNetLib.NetPeer.SendWithDeliveryEvent(LiteNetLib.Utils.NetDataWriter,System.Byte,LiteNetLib.DeliveryMethod,System.Object)">
+            <summary>
+            Send data to peer with delivery event called
+            </summary>
+            <param name="dataWriter">Data</param>
+            <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
+            <param name="deliveryMethod">Delivery method (reliable, unreliable, etc.)</param>
+            <param name="userData">User data that will be received in DeliveryEvent</param>
+            <exception cref="T:System.ArgumentException">
+                If you trying to send unreliable packet type<para/>
+            </exception>
+        </member>
         <member name="M:LiteNetLib.NetPeer.Send(System.Byte[],LiteNetLib.DeliveryMethod)">
             <summary>
             Send data to peer (channel - 0)
             </summary>
             <param name="data">Data</param>
-            <param name="options">Send options (reliable, unreliable, etc.)</param>
+            <param name="deliveryMethod">Send options (reliable, unreliable, etc.)</param>
             <exception cref="T:LiteNetLib.TooBigPacketException">
                 If size exceeds maximum limit:<para/>
                 MTU - headerSize bytes for Unreliable<para/>
@@ -662,7 +708,7 @@
             Send data to peer (channel - 0)
             </summary>
             <param name="dataWriter">DataWriter with data</param>
-            <param name="options">Send options (reliable, unreliable, etc.)</param>
+            <param name="deliveryMethod">Send options (reliable, unreliable, etc.)</param>
             <exception cref="T:LiteNetLib.TooBigPacketException">
                 If size exceeds maximum limit:<para/>
                 MTU - headerSize bytes for Unreliable<para/>
@@ -689,7 +735,7 @@
             </summary>
             <param name="data">Data</param>
             <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
-            <param name="options">Send options (reliable, unreliable, etc.)</param>
+            <param name="deliveryMethod">Send options (reliable, unreliable, etc.)</param>
             <exception cref="T:LiteNetLib.TooBigPacketException">
                 If size exceeds maximum limit:<para/>
                 MTU - headerSize bytes for Unreliable<para/>
@@ -702,7 +748,7 @@
             </summary>
             <param name="dataWriter">DataWriter with data</param>
             <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
-            <param name="options">Send options (reliable, unreliable, etc.)</param>
+            <param name="deliveryMethod">Send options (reliable, unreliable, etc.)</param>
             <exception cref="T:LiteNetLib.TooBigPacketException">
                 If size exceeds maximum limit:<para/>
                 MTU - headerSize bytes for Unreliable<para/>
@@ -717,7 +763,7 @@
             <param name="start">Start of data</param>
             <param name="length">Length of data</param>
             <param name="channelNumber">Number of channel (from 0 to channelsCount - 1)</param>
-            <param name="options">Send options (reliable, unreliable, etc.)</param>
+            <param name="deliveryMethod">Delivery method (reliable, unreliable, etc.)</param>
             <exception cref="T:LiteNetLib.TooBigPacketException">
                 If size exceeds maximum limit:<para/>
                 MTU - headerSize bytes for Unreliable<para/>
@@ -746,7 +792,7 @@
             <param name="addrType">type of address (IPv4, IPv6 or both)</param>
             <returns>List with all local ip adresses</returns>
         </member>
-        <member name="M:LiteNetLib.NetUtils.GetLocalIpList(System.Collections.Generic.List{System.String},LiteNetLib.LocalAddrType)">
+        <member name="M:LiteNetLib.NetUtils.GetLocalIpList(System.Collections.Generic.IList{System.String},LiteNetLib.LocalAddrType)">
             <summary>
             Get all local ip addresses (non alloc version)
             </summary>
@@ -759,6 +805,15 @@
             </summary>
             <param name="addrType">type of address (IPv4, IPv6 or both)</param>
             <returns>IP address if available. Else - string.Empty</returns>
+        </member>
+        <member name="M:LiteNetLib.Utils.CRC32C.Compute(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Compute CRC32C for data
+            </summary>
+            <param name="input">input data</param>
+            <param name="offset">offset</param>
+            <param name="length">length</param>
+            <returns>CRC32C checksum</returns>
         </member>
         <member name="M:LiteNetLib.Utils.NetDataWriter.FromBytes(System.Byte[],System.Boolean)">
             <summary>

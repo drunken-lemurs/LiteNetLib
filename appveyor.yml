@@ -1,4 +1,4 @@
-image: Visual Studio 2017
+image: Visual Studio 2019
 version: 0.9.{build}
 configuration:
   - Release
@@ -6,7 +6,7 @@ before_build:
   - nuget restore
   - dotnet restore
 assembly_info:
-  patch: true
+  patch: false
   file: AssemblyInfo.cs
   assembly_version: '{version}'
   assembly_file_version: '{version}'
@@ -22,6 +22,6 @@ artifacts:
   - path: LiteNetLib/bin/Release/netstandard2.0
     name: LiteNetLibStandard-$(appveyor_build_version)
     type: Zip
-  - path: LiteNetLib/bin/Release/netcoreapp2.0
+  - path: LiteNetLib/bin/Release/netcoreapp2.1
     name: LiteNetLibNetCore-$(appveyor_build_version)
     type: Zip

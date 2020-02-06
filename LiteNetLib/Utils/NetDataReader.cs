@@ -50,6 +50,11 @@ namespace LiteNetLib.Utils
         {
             get { return _dataSize - _position; }
         }
+        
+        public void SkipBytes(int count) 
+        {
+            _position += count;
+        }
 
         public void SetSource(NetDataWriter dataWriter)
         {
@@ -680,7 +685,7 @@ namespace LiteNetLib.Utils
             if (AvailableBytes >= 4)
             {
                 var length = PeekInt();
-                if (AvailableBytes >= length + 4)
+                if (length >= 0 && AvailableBytes >= length + 4)
                 {
                     result = GetBytesWithLength();
                     return true;

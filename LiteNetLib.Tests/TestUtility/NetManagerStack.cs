@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using LiteNetLib.Layers;
 using NUnit.Framework;
 
 namespace LiteNetLib.Tests.TestUtility
@@ -101,10 +101,9 @@ namespace LiteNetLib.Tests.TestUtility
                 {
                     request.AcceptIfKey(_appKey);
                 };
-                NetManager netManager;
+                NetManager netManager = new NetManager(listener, new Crc32cLayer());
                 if (isClient)
                 {
-                    netManager = new NetManager(listener);
                     if (!netManager.Start())
                     {
                         Assert.Fail($"Client {id} start failed");
@@ -112,7 +111,6 @@ namespace LiteNetLib.Tests.TestUtility
                 }
                 else
                 {
-                    netManager = new NetManager(listener);
                     if (!netManager.Start(_serverPort))
                     {
                         Assert.Fail($"Server {id} on port{_serverPort} start failed");

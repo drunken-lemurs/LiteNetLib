@@ -15,14 +15,14 @@ namespace LiteNetLib
                 {
                     NetPacket packet = OutgoingQueue.Dequeue();
                     Peer.SendUserData(packet);
-                    Peer.Recycle(packet);
+                    Peer.NetManager.NetPacketPool.Recycle(packet);
                 }
             }
         }
 
-        public override void ProcessPacket(NetPacket packet)
+        public override bool ProcessPacket(NetPacket packet)
         {
-            
+            return false;
         }
     }
 }
